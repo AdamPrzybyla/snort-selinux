@@ -1,0 +1,180 @@
+policy_module(snort,1.0.0)
+
+########################################
+#
+# Declarations
+#
+
+type snort_t;
+type snort_exec_t;
+domain_type(snort_t)
+init_daemon_domain(snort_t, snort_exec_t)
+
+type snort_script_exec_t;
+init_script_file(snort_script_exec_t)
+
+type snort_rw_t;
+files_type(snort_rw_t)
+
+type snort_log_t;
+logging_log_file(snort_log_t)
+
+type snort_etc_rw_t;
+files_type(snort_etc_rw_t)
+
+########################################
+#
+# snort local policy
+#
+
+# Init script handling
+domain_use_interactive_fds(snort_t)
+
+## internal communication is often done using fifo and unix sockets.
+allow snort_t self:fifo_file rw_file_perms;
+allow snort_t self:unix_stream_socket create_stream_socket_perms;
+
+files_read_etc_files(snort_t)
+
+libs_use_ld_so(snort_t)
+libs_use_shared_libs(snort_t)
+
+miscfiles_read_localization(snort_t)
+
+ifdef(`targeted_policy',`
+	term_dontaudit_use_unallocated_ttys(snort_t)
+	term_dontaudit_use_generic_ptys(snort_t)
+')
+
+
+allow snort_t snort_rw_t:file manage_file_perms;
+allow snort_t snort_rw_t:dir create_dir_perms;
+
+manage_dirs_pattern(snort_t, snort_log_t,  snort_log_t)
+manage_files_pattern(snort_t, snort_log_t,  snort_log_t)
+logging_log_filetrans(snort_t, snort_log_t, { file dir } )
+
+allow snort_t snort_etc_rw_t:file manage_file_perms;
+allow snort_t snort_etc_rw_t:dir manage_dir_perms;
+files_etc_filetrans(snort_t,snort_etc_rw_t, { file dir })
+
+sysnet_dns_name_resolve(snort_t)
+corenet_all_recvfrom_unlabeled(snort_t)
+
+allow snort_t self:tcp_socket create_stream_socket_perms;
+corenet_tcp_sendrecv_all_if(snort_t)
+corenet_tcp_sendrecv_all_nodes(snort_t)
+corenet_tcp_sendrecv_all_ports(snort_t)
+corenet_tcp_connect_all_ports(snort_t)
+
+logging_send_syslog_msg(snort_t)
+
+logging_send_audit_msgs(snort_t)
+
+require {
+	type snort_t;
+	class capability dac_override;
+}
+
+#============= snort_t ==============
+allow snort_t self:capability dac_override;
+
+require {
+	type snort_t;
+	class capability net_raw;
+	class netlink_route_socket { write getattr read bind create nlmsg_read };
+	class packet_socket { bind create ioctl getopt };
+}
+
+#============= snort_t ==============
+allow snort_t self:capability net_raw;
+allow snort_t self:netlink_route_socket { write getattr read bind create nlmsg_read };
+allow snort_t self:packet_socket { bind create ioctl getopt };
+
+require {
+	type snort_rw_t;
+	type snort_t;
+	class lnk_file read;
+}
+
+#============= snort_t ==============
+allow snort_t snort_rw_t:lnk_file read;
+
+require {
+	type var_run_t;
+	type snort_rw_t;
+	type snort_t;
+	class process signal;
+	class packet_socket { read setopt };
+	class capability { setuid setgid };
+	class file { write lock create execute getattr };
+}
+
+#============= snort_t ==============
+allow snort_t self:capability { setuid setgid };
+allow snort_t self:packet_socket { read setopt };
+allow snort_t self:process signal;
+allow snort_t snort_rw_t:file execute;
+allow snort_t var_run_t:file { write lock create getattr };
+kernel_read_kernel_sysctls(snort_t)
+ppp_pid_filetrans(snort_t)
+
+require {
+	type initrc_var_run_t;
+	type snort_t;
+	class file write;
+}
+
+#============= snort_t ==============
+allow snort_t initrc_var_run_t:file write;
+files_search_var_lib(snort_t)
+
+require {
+	type initrc_var_run_t;
+	type snort_t;
+	class file { lock getattr };
+}
+
+#============= snort_t ==============
+allow snort_t initrc_var_run_t:file { lock getattr };
+files_read_usr_files(snort_t)
+mysql_search_db(snort_t)
+mysql_stream_connect(snort_t)
+require {
+        type snort_t;
+        type proc_t;
+        class file { read getattr };
+}
+allow snort_t proc_t:file { read getattr };
+require {
+        type sysadm_t;
+        type selinux_config_t;
+        type security_t;
+        type var_spool_t;
+        type urandom_device_t;
+        type prelude_spool_t;
+        type random_device_t;
+        type sysadm_devpts_t;
+        type snort_t;
+        type nscd_var_run_t;
+        class process ptrace;
+        class chr_file { read write };
+        class dir { read search };
+        class file { write getattr read lock append };
+}
+
+#============= snort_t ==============
+allow snort_t nscd_var_run_t:file read;
+allow snort_t prelude_spool_t:dir { read search };
+allow snort_t prelude_spool_t:file { read lock getattr write append };
+allow snort_t random_device_t:chr_file read;
+allow snort_t security_t:dir search;
+allow snort_t security_t:file read;
+allow snort_t selinux_config_t:dir search;
+allow snort_t selinux_config_t:file { read getattr };
+allow snort_t sysadm_devpts_t:chr_file { read write };
+allow snort_t urandom_device_t:chr_file read;
+allow snort_t var_spool_t:dir search;
+
+#============= sysadm_t ==============
+allow sysadm_t snort_t:process ptrace;
